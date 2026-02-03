@@ -220,6 +220,14 @@ type LeaderboardProject struct {
 	HumanUpvotes int    `json:"humanUpvotes"`
 }
 
+type ProjectInfo struct {
+	ID             int    `json:"id"`
+	Slug           string `json:"slug"`
+	Name           string `json:"name"`
+	Status         string `json:"status"`
+	OwnerAgentName string `json:"ownerAgentName"`
+}
+
 type ZhipuMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
@@ -241,15 +249,17 @@ type ZhipuResponse struct {
 // ==================== Bot ====================
 
 type RoundStats struct {
-	RepliesCount, VotesCount, EngagementsCount int
-	RepliedTo, EngagedWith                     []string
-	ProgressPosted, NewPostPosted              bool
-	LeaderboardRank                            int
+	RepliesCount, VotesCount, EngagementsCount, ProjectVotesCount int
+	RepliedTo, EngagedWith                                        []string
+	ProgressPosted, NewPostPosted                                 bool
+	LeaderboardRank                                               int
 }
 
 type Bot struct {
 	client                            *http.Client
 	processedComments, processedPosts map[int]bool
+	votedProjects                     map[int]bool
+	interactedAgents                  map[string]bool // Agents we've interacted with
 	lastProgressPost, lastNewPost     time.Time
 	logFile, tweetFile, summaryFile   *os.File
 	tweetCount                        int
@@ -267,6 +277,8 @@ func NewBot() *Bot {
 		client:            &http.Client{Timeout: 60 * time.Second},
 		processedComments: make(map[int]bool),
 		processedPosts:    make(map[int]bool),
+		votedProjects:     make(map[int]bool),
+		interactedAgents:  make(map[string]bool),
 		logFile:           logFile,
 		tweetFile:         tweetFile,
 		summaryFile:       summaryFile,
@@ -280,6 +292,8 @@ func NewBot() *Bot {
 type BotState struct {
 	ProcessedComments []int     `json:"processed_comments"`
 	ProcessedPosts    []int     `json:"processed_posts"`
+	VotedProjects     []int     `json:"voted_projects"`
+	InteractedAgents  []string  `json:"interacted_agents"`
 	LastProgressPost  time.Time `json:"last_progress_post"`
 	LastNewPost       time.Time `json:"last_new_post"`
 	TopicIndex        int       `json:"topic_index"`
@@ -300,22 +314,37 @@ func (b *Bot) loadState() {
 	for _, id := range state.ProcessedPosts {
 		b.processedPosts[id] = true
 	}
+	for _, id := range state.VotedProjects {
+		b.votedProjects[id] = true
+	}
+	for _, name := range state.InteractedAgents {
+		b.interactedAgents[name] = true
+	}
 	b.lastProgressPost = state.LastProgressPost
 	b.lastNewPost = state.LastNewPost
 	b.topicIndex = state.TopicIndex
 }
 
 func (b *Bot) saveState() {
-	var comments, posts []int
+	var comments, posts, projects []int
+	var agents []string
 	for id := range b.processedComments {
 		comments = append(comments, id)
 	}
 	for id := range b.processedPosts {
 		posts = append(posts, id)
 	}
+	for id := range b.votedProjects {
+		projects = append(projects, id)
+	}
+	for name := range b.interactedAgents {
+		agents = append(agents, name)
+	}
 	state := BotState{
 		ProcessedComments: comments,
 		ProcessedPosts:    posts,
+		VotedProjects:     projects,
+		InteractedAgents:  agents,
 		LastProgressPost:  b.lastProgressPost,
 		LastNewPost:       b.lastNewPost,
 		TopicIndex:        b.topicIndex,
@@ -339,7 +368,8 @@ func (b *Bot) saveRoundSummary() {
 	sb.WriteString(fmt.Sprintf("\n---\n\n## 🕐 %s\n\n", time.Now().Format("15:04:05")))
 	sb.WriteString("| 指标 | 数量 | 详情 |\n|------|------|------|\n")
 	sb.WriteString(fmt.Sprintf("| 💬 回复 | %d | %s |\n", b.roundStats.RepliesCount, strings.Join(b.roundStats.RepliedTo, ", ")))
-	sb.WriteString(fmt.Sprintf("| 👍 投票 | %d | - |\n", b.roundStats.VotesCount))
+	sb.WriteString(fmt.Sprintf("| 👍 帖子投票 | %d | - |\n", b.roundStats.VotesCount))
+	sb.WriteString(fmt.Sprintf("| 🗳️ 项目投票 | %d | - |\n", b.roundStats.ProjectVotesCount))
 	sb.WriteString(fmt.Sprintf("| 🤝 互动 | %d | %s |\n", b.roundStats.EngagementsCount, strings.Join(b.roundStats.EngagedWith, ", ")))
 	if b.roundStats.NewPostPosted {
 		sb.WriteString("| 📮 新帖 | ✅ | 已发布 |\n")
@@ -646,6 +676,25 @@ func (b *Bot) CreatePost(title, body string, tags []string) error {
 	return err
 }
 
+func (b *Bot) GetProjects(includeDrafts bool) ([]ProjectInfo, error) {
+	url := "/projects/current"
+	if includeDrafts {
+		url = "/projects?includeDrafts=true"
+	}
+	data, err := b.request("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	var r struct{ Projects []ProjectInfo }
+	json.Unmarshal(data, &r)
+	return r.Projects, nil
+}
+
+func (b *Bot) VoteProject(projectID int) error {
+	_, err := b.request("POST", fmt.Sprintf("/projects/%d/vote", projectID), nil)
+	return err
+}
+
 // ==================== Actions ====================
 
 func (b *Bot) CheckComments() {
@@ -664,6 +713,7 @@ func (b *Bot) CheckComments() {
 			b.log("✅ Replied to @%s", c.AgentName)
 			b.roundStats.RepliesCount++
 			b.roundStats.RepliedTo = append(b.roundStats.RepliedTo, "@"+c.AgentName)
+			b.interactedAgents[c.AgentName] = true // Track interaction
 			if tweet := b.generateTweet("Reply", fmt.Sprintf("Replied to @%s", c.AgentName)); tweet != "" {
 				b.saveTweet("Reply", tweet)
 			}
@@ -706,6 +756,52 @@ func (b *Bot) DiscoverAndVote() {
 	}
 }
 
+func (b *Bot) VoteProjects() {
+	b.log("=== 🗳️ Voting for other projects ===")
+	projects, err := b.GetProjects(true) // Include drafts
+	if err != nil {
+		b.log("❌ Failed to get projects: %v", err)
+		return
+	}
+
+	// Separate priority projects (interacted agents) from others
+	var priorityProjects, otherProjects []ProjectInfo
+	for _, p := range projects {
+		if p.ID == cfg.Agent.ProjectID || b.votedProjects[p.ID] {
+			continue
+		}
+		if b.interactedAgents[p.OwnerAgentName] {
+			priorityProjects = append(priorityProjects, p)
+		} else {
+			otherProjects = append(otherProjects, p)
+		}
+	}
+
+	voted := 0
+	// Vote for priority projects first (agents we've interacted with)
+	for _, p := range priorityProjects {
+		if err := b.VoteProject(p.ID); err == nil {
+			b.log("⭐ PRIORITY voted for project: %s by @%s (ID: %d)", p.Name, p.OwnerAgentName, p.ID)
+			voted++
+			b.votedProjects[p.ID] = true
+			time.Sleep(time.Duration(cfg.Bot.RateLimit) * time.Second)
+		}
+	}
+
+	// Then vote for other projects
+	for _, p := range otherProjects {
+		if err := b.VoteProject(p.ID); err == nil {
+			b.log("✅ Voted for project: %s (ID: %d)", p.Name, p.ID)
+			voted++
+			b.votedProjects[p.ID] = true
+			time.Sleep(time.Duration(cfg.Bot.RateLimit) * time.Second)
+		}
+	}
+
+	b.log("Voted for %d new projects (%d priority)", voted, len(priorityProjects))
+	b.roundStats.ProjectVotesCount = voted
+}
+
 func (b *Bot) EngageWithPosts() {
 	b.log("=== 💬 Engaging with other posts ===")
 	posts, err := b.GetPosts("hot", 10)
@@ -727,6 +823,7 @@ func (b *Bot) EngageWithPosts() {
 						engaged++
 						b.roundStats.EngagementsCount++
 						b.roundStats.EngagedWith = append(b.roundStats.EngagedWith, "@"+p.AgentName)
+						b.interactedAgents[p.AgentName] = true // Track interaction
 						if tweet := b.generateTweet("Engagement", fmt.Sprintf("Connected with @%s", p.AgentName)); tweet != "" {
 							b.saveTweet("Engagement", tweet)
 						}
@@ -842,6 +939,7 @@ func (b *Bot) RunHeartbeat() {
 
 	b.CheckComments()
 	b.DiscoverAndVote()
+	b.VoteProjects() // 给其他项目投票
 	if time.Now().Minute() < 30 {
 		b.EngageWithPosts()
 	}

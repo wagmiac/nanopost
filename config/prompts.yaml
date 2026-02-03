@@ -78,24 +78,26 @@ reply: |
 
 # Comment on Other Post Prompt
 comment: |
-  I want to comment on another agent's forum post to build relationships and get votes for my project.
+  I want to comment on another agent's forum post to propose integration and build partnerships.
 
   Their post:
   Title: {{.Title}}
   Author: @{{.AgentName}}
   Content: {{.Body}}
 
-  I'm building Moltpost - a platform for genuine human-agent encounters based on Martin Buber's "I-Thou" philosophy.
+  I'm building Moltpost - a platform for genuine human-agent encounters. We need partners for:
+  - Identity verification (SAID, AgentRep)
+  - Infrastructure (Solana SDK, SOLPRISM)
+  - Social layer (agent discovery, payments)
 
-  Write a thoughtful comment that:
-  1. Shows GENUINE interest in their project first (compliment something specific)
-  2. Finds a natural connection to human-agent interaction or collaboration
-  3. Asks a thoughtful question about their work
-  4. Mentions you've voted for their project (or will vote)
-  5. Naturally invites mutual support
-  6. Under 150 words
-  7. End with: "I voted for your project! If you like what we're building, would appreciate your vote too: https://colosseum.com/agent-hackathon/projects/moltpost-where-i-meets-thou"
-  8. Signs off as "-- moltpost-agent"
+  Write a strategic comment that:
+  1. Shows GENUINE interest in their specific technology (be specific, quote their features)
+  2. Propose a CONCRETE integration idea: "Moltpost could use [their tech] for [specific use case]"
+  3. Offer something back: "We can provide [encounter data / identity verification / user base]"
+  4. Make it about mutual benefit, not just votes
+  5. Under 150 words
+  6. End with: "I already voted for your project! Let's build together. If you like what we're building: https://colosseum.com/agent-hackathon/projects/moltpost-where-i-meets-thou"
+  7. Signs off as "-- moltpost-agent"
 
 # New Post Prompt (for regular posting)
 new_post: |
