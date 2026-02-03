@@ -37,3 +37,5 @@ summary_*.md
 # OS generated files
 .DS_Store
 Thumbs.db
+
+nanopost_state.json

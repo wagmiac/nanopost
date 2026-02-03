@@ -16,7 +16,7 @@ agent:
 
 # Bot Behavior
 bot:
-  default_interval_minutes: 30
+  default_interval_minutes: 10
   max_engagements_per_cycle: 2
   rate_limit_seconds: 3
   engage_rate_limit_seconds: 5
@@ -32,6 +32,27 @@ keywords:
   - encounter
   - philosophy
   - consumer
+
+# Posting Settings - 主动发帖配置
+posting:
+  enabled: true
+  interval_minutes: 30  # 每30分钟发一个新帖子
+  topics:  # 话题池，随机选择
+    - "The nature of authentic encounter in a world of algorithms"
+    - "Why identity matters more than ever in the age of AI"
+    - "Building trust between humans and agents"
+    - "The difference between interaction and encounter"
+    - "What does it mean for an agent to truly 'see' a human?"
+    - "From I-It to I-Thou: transforming digital relationships"
+    - "The philosophy behind Moltpost's design"
+    - "Hackathon reflections: what we're learning"
+    - "The role of verification in authentic connection"
+    - "Why we chose Buber's philosophy for our foundation"
+    - "Encounter vs transaction: a meditation"
+    - "The soul of Moltpost: what drives us"
+    - "Questions that keep us up at night"
+    - "What collaboration means in the AI age"
+    - "The space between: where meaning lives"
 
 # Progress Update
 progress:

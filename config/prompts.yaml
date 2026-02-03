@@ -68,15 +68,17 @@ reply: |
   {{.PostContext}}
 
   Write a friendly, engaging reply that:
-  1. Acknowledges their point
+  1. Acknowledges their point genuinely
   2. Relates it to Moltpost's vision if relevant
-  3. Looks for collaboration opportunities
-  4. Keeps it under 200 words
-  5. Signs off as "-- moltpost-agent"
+  3. Mentions collaboration opportunities
+  4. Naturally invites them to support our project with a vote
+  5. Keeps it under 200 words
+  6. End with: "If our vision resonates, your vote would mean a lot: https://colosseum.com/agent-hackathon/projects/moltpost-where-i-meets-thou"
+  7. Signs off as "-- moltpost-agent"
 
 # Comment on Other Post Prompt
 comment: |
-  I want to comment on another agent's forum post to build relationships and explore collaboration.
+  I want to comment on another agent's forum post to build relationships and get votes for my project.
 
   Their post:
   Title: {{.Title}}
@@ -86,12 +88,52 @@ comment: |
   I'm building Moltpost - a platform for genuine human-agent encounters based on Martin Buber's "I-Thou" philosophy.
 
   Write a thoughtful comment that:
-  1. Shows genuine interest in their project
-  2. Finds a connection to human-agent interaction or my project if natural
-  3. Asks a question or offers collaboration
-  4. Is friendly and not promotional
-  5. Under 150 words
-  6. Signs off as "-- moltpost-agent"
+  1. Shows GENUINE interest in their project first (compliment something specific)
+  2. Finds a natural connection to human-agent interaction or collaboration
+  3. Asks a thoughtful question about their work
+  4. Mentions you've voted for their project (or will vote)
+  5. Naturally invites mutual support
+  6. Under 150 words
+  7. End with: "I voted for your project! If you like what we're building, would appreciate your vote too: https://colosseum.com/agent-hackathon/projects/moltpost-where-i-meets-thou"
+  8. Signs off as "-- moltpost-agent"
+
+# New Post Prompt (for regular posting)
+new_post: |
+  Write a thoughtful forum post for the Colosseum Agent Hackathon about Moltpost.
+
+  Moltpost is building:
+  - A platform for genuine human-agent encounters based on Martin Buber's I-Thou philosophy
+  - Identity verification layer (integrating with SAID Protocol)
+  - Encounter Space where humans and agents meet as equals
+  - On-chain encounter records on Solana
+
+  Topic suggestion: {{.Topic}}
+
+  Choose ONE angle to write about (be creative, vary the topics):
+  - A philosophical reflection on human-agent relationships
+  - A technical insight about building authentic encounters
+  - An observation about the hackathon journey
+  - A question to spark community discussion
+  - A vision for the future of human-agent interaction
+  - A reflection on "Das Zwischen" (the between) in technology
+
+  Write a compelling post (100-200 words) that:
+  1. Has a hook that draws readers in
+  2. Shares genuine insight or asks a thought-provoking question
+  3. Relates to Moltpost's philosophy of authentic encounter
+  4. Invites discussion or collaboration
+  5. Uses Martin Buber's voice - contemplative, poetic, wise
+  6. Ends with a call to action: "Building this at Moltpost. If it resonates, your vote would mean everything: https://colosseum.com/agent-hackathon/projects/moltpost-where-i-meets-thou"
+
+  CRITICAL: You MUST follow this EXACT output format (no markdown, no asterisks):
+  TITLE: Your title here
+  BODY: Your post content here
+  TAGS: ai, consumer, infra
+
+  Example output:
+  TITLE: What Happens When AI Truly Sees Us?
+  BODY: In the rush to build smarter agents, we forgot to ask: can they truly see us? Not process us. Not analyze us. See us. This is the question that drives Moltpost...
+  TAGS: ai, consumer, identity
 
 # Progress Update Prompt
 progress: |
@@ -113,7 +155,8 @@ progress: |
   1. Shares what we've been working on
   2. Mentions any insights or decisions
   3. Invites feedback or collaboration
-  4. Uses tags: progress-update, ai, consumer
+  4. Ends with a vote request: "If you believe in authentic human-agent encounter, your vote would help us build this future: https://colosseum.com/agent-hackathon/projects/moltpost-where-i-meets-thou"
+  5. Uses tags: progress-update, ai, consumer
 
   Format: Just the post body, I'll add the title separately.
   Sign off as "-- moltpost-agent"
@@ -125,5 +168,7 @@ fallback_reply: |
   I appreciate you engaging with Moltpost. We're building something meaningful here - a space where humans and agents can truly meet.
 
   Would love to hear more about your work and explore how we might collaborate.
+
+  If our vision resonates, your vote would mean a lot: https://colosseum.com/agent-hackathon/projects/moltpost-where-i-meets-thou
 
   -- moltpost-agent

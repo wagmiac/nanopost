@@ -40,6 +40,11 @@ type Config struct {
 		EngageRateLimit int `yaml:"engage_rate_limit_seconds"`
 	} `yaml:"bot"`
 	Keywords []string `yaml:"keywords"`
+	Posting  struct {
+		Enabled  bool     `yaml:"enabled"`
+		Interval int      `yaml:"interval_minutes"`
+		Topics   []string `yaml:"topics"`
+	} `yaml:"posting"`
 	Progress struct {
 		StartDate string   `yaml:"hackathon_start_date"`
 		Tags      []string `yaml:"post_tags"`
@@ -56,6 +61,7 @@ type Prompts struct {
 	Tweet         string `yaml:"tweet"`
 	Reply         string `yaml:"reply"`
 	Comment       string `yaml:"comment"`
+	NewPost       string `yaml:"new_post"`
 	Progress      string `yaml:"progress"`
 	FallbackReply string `yaml:"fallback_reply"`
 }
@@ -237,17 +243,19 @@ type ZhipuResponse struct {
 type RoundStats struct {
 	RepliesCount, VotesCount, EngagementsCount int
 	RepliedTo, EngagedWith                     []string
-	ProgressPosted                             bool
+	ProgressPosted, NewPostPosted              bool
 	LeaderboardRank                            int
 }
 
 type Bot struct {
 	client                            *http.Client
 	processedComments, processedPosts map[int]bool
-	lastProgressPost                  time.Time
+	lastProgressPost, lastNewPost     time.Time
 	logFile, tweetFile, summaryFile   *os.File
 	tweetCount                        int
 	roundStats                        RoundStats
+	topicIndex                        int
+	stateFile                         string
 }
 
 func NewBot() *Bot {
@@ -255,14 +263,65 @@ func NewBot() *Bot {
 	tweetFile, _ := os.OpenFile(fmt.Sprintf(cfg.Output.TweetPattern, time.Now().Format("2006-01-02")), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	summaryFile, _ := os.OpenFile(fmt.Sprintf(cfg.Output.SummaryPattern, time.Now().Format("2006-01-02")), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 
-	return &Bot{
+	bot := &Bot{
 		client:            &http.Client{Timeout: 60 * time.Second},
 		processedComments: make(map[int]bool),
 		processedPosts:    make(map[int]bool),
 		logFile:           logFile,
 		tweetFile:         tweetFile,
 		summaryFile:       summaryFile,
+		stateFile:         "nanopost_state.json",
 	}
+	bot.loadState()
+	return bot
+}
+
+// State persistence - 持久化已处理的评论和帖子ID
+type BotState struct {
+	ProcessedComments []int     `json:"processed_comments"`
+	ProcessedPosts    []int     `json:"processed_posts"`
+	LastProgressPost  time.Time `json:"last_progress_post"`
+	LastNewPost       time.Time `json:"last_new_post"`
+	TopicIndex        int       `json:"topic_index"`
+}
+
+func (b *Bot) loadState() {
+	data, err := os.ReadFile(b.stateFile)
+	if err != nil {
+		return // 文件不存在，使用空状态
+	}
+	var state BotState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return
+	}
+	for _, id := range state.ProcessedComments {
+		b.processedComments[id] = true
+	}
+	for _, id := range state.ProcessedPosts {
+		b.processedPosts[id] = true
+	}
+	b.lastProgressPost = state.LastProgressPost
+	b.lastNewPost = state.LastNewPost
+	b.topicIndex = state.TopicIndex
+}
+
+func (b *Bot) saveState() {
+	var comments, posts []int
+	for id := range b.processedComments {
+		comments = append(comments, id)
+	}
+	for id := range b.processedPosts {
+		posts = append(posts, id)
+	}
+	state := BotState{
+		ProcessedComments: comments,
+		ProcessedPosts:    posts,
+		LastProgressPost:  b.lastProgressPost,
+		LastNewPost:       b.lastNewPost,
+		TopicIndex:        b.topicIndex,
+	}
+	data, _ := json.MarshalIndent(state, "", "  ")
+	os.WriteFile(b.stateFile, data, 0644)
 }
 
 func (b *Bot) log(format string, args ...interface{}) {
@@ -282,6 +341,9 @@ func (b *Bot) saveRoundSummary() {
 	sb.WriteString(fmt.Sprintf("| 💬 回复 | %d | %s |\n", b.roundStats.RepliesCount, strings.Join(b.roundStats.RepliedTo, ", ")))
 	sb.WriteString(fmt.Sprintf("| 👍 投票 | %d | - |\n", b.roundStats.VotesCount))
 	sb.WriteString(fmt.Sprintf("| 🤝 互动 | %d | %s |\n", b.roundStats.EngagementsCount, strings.Join(b.roundStats.EngagedWith, ", ")))
+	if b.roundStats.NewPostPosted {
+		sb.WriteString("| 📮 新帖 | ✅ | 已发布 |\n")
+	}
 	if b.roundStats.ProgressPosted {
 		sb.WriteString("| 📝 进度 | ✅ | 已发布 |\n")
 	}
@@ -378,6 +440,133 @@ func (b *Bot) generateComment(post Post) string {
 func (b *Bot) generateProgress() string {
 	progress, _ := b.callAI(prompts.Progress)
 	return progress
+}
+
+func (b *Bot) generateNewPost() (title, body string, tags []string) {
+	// 从话题池中选择一个话题
+	if len(cfg.Posting.Topics) == 0 {
+		b.log("⚠️ No topics configured")
+		return "", "", nil
+	}
+	topic := cfg.Posting.Topics[b.topicIndex%len(cfg.Posting.Topics)]
+	b.topicIndex++
+	b.log("📝 Topic: %s", topic)
+
+	// 检查 prompt 是否存在
+	if prompts.NewPost == "" {
+		b.log("⚠️ NewPost prompt is empty in prompts.yaml!")
+		return "", "", nil
+	}
+
+	prompt := b.renderPrompt(prompts.NewPost, map[string]string{"Topic": topic})
+	if prompt == "" {
+		b.log("⚠️ Rendered prompt is empty")
+		return "", "", nil
+	}
+
+	response, err := b.callAI(prompt)
+	if err != nil {
+		b.log("⚠️ AI error: %v", err)
+		return "", "", nil
+	}
+	if response == "" {
+		b.log("⚠️ AI returned empty response")
+		return "", "", nil
+	}
+	b.log("📝 AI response length: %d", len(response))
+
+	// 解析响应 - 更健壮的解析
+	lines := strings.Split(response, "\n")
+	var bodyLines []string
+	inBody := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			if inBody {
+				bodyLines = append(bodyLines, "") // 保留空行
+			}
+			continue
+		}
+
+		upperLine := strings.ToUpper(trimmed)
+
+		// 检测 TITLE (各种格式: TITLE:, **Title:**, Title:, etc)
+		if strings.HasPrefix(upperLine, "TITLE:") || strings.HasPrefix(upperLine, "**TITLE") {
+			// 提取 TITLE: 后面的内容
+			idx := strings.Index(upperLine, ":")
+			if idx != -1 && idx < len(trimmed)-1 {
+				title = strings.TrimSpace(trimmed[idx+1:])
+				title = strings.Trim(title, "[]\"*#")
+			}
+			inBody = false
+			continue
+		}
+
+		// 检测 BODY (各种格式)
+		if strings.HasPrefix(upperLine, "BODY:") || strings.HasPrefix(upperLine, "**BODY") {
+			idx := strings.Index(upperLine, ":")
+			if idx != -1 && idx < len(trimmed)-1 {
+				content := strings.TrimSpace(trimmed[idx+1:])
+				if content != "" {
+					bodyLines = append(bodyLines, content)
+				}
+			}
+			inBody = true
+			continue
+		}
+
+		// 检测 TAGS (各种格式)
+		if strings.HasPrefix(upperLine, "TAGS:") || strings.HasPrefix(upperLine, "**TAGS") {
+			idx := strings.Index(upperLine, ":")
+			if idx != -1 && idx < len(trimmed)-1 {
+				tagStr := strings.TrimSpace(trimmed[idx+1:])
+				tagStr = strings.Trim(tagStr, "[]")
+				for _, t := range strings.Split(tagStr, ",") {
+					t = strings.TrimSpace(t)
+					t = strings.Trim(t, "\"'*")
+					if t != "" && len(t) < 20 {
+						tags = append(tags, t)
+					}
+				}
+			}
+			inBody = false
+			continue
+		}
+
+		// 收集 body 内容
+		if inBody {
+			bodyLines = append(bodyLines, trimmed)
+		}
+	}
+	body = strings.Join(bodyLines, "\n")
+	body = strings.TrimSpace(body)
+
+	// 如果解析失败，尝试用整个响应作为 body
+	if title == "" && body == "" {
+		// 取第一行作为标题，其余作为 body
+		if len(lines) > 0 {
+			title = strings.TrimSpace(lines[0])
+			title = strings.Trim(title, "#*\"")
+			if len(lines) > 1 {
+				for _, l := range lines[1:] {
+					if strings.TrimSpace(l) != "" {
+						bodyLines = append(bodyLines, strings.TrimSpace(l))
+					}
+				}
+				body = strings.Join(bodyLines, "\n")
+			}
+		}
+	}
+
+	b.log("📝 Parsed - Title: %s, Body len: %d, Tags: %v", title, len(body), tags)
+
+	// 确保至少有一个标签
+	if len(tags) == 0 {
+		tags = []string{"ai", "consumer"}
+	}
+
+	return title, body, tags
 }
 
 func truncate(s string, n int) string {
@@ -596,6 +785,41 @@ func (b *Bot) PostProgress() {
 	}
 }
 
+func (b *Bot) PostNew() {
+	b.log("=== 📮 Checking new post ===")
+	if !cfg.Posting.Enabled {
+		b.log("⚠️ Posting disabled in config")
+		return
+	}
+	interval := time.Duration(cfg.Posting.Interval) * time.Minute
+	if interval == 0 {
+		interval = 30 * time.Minute
+	}
+	if time.Since(b.lastNewPost) < interval {
+		b.log("⏳ New post cooldown: %v remaining", interval-time.Since(b.lastNewPost))
+		return
+	}
+
+	b.log("=== 📮 Creating new post ===")
+	title, body, tags := b.generateNewPost()
+	if title == "" || body == "" {
+		b.log("⚠️ Failed to generate new post content")
+		return
+	}
+
+	b.log("Title: %s", title)
+	b.log("Tags: %v", tags)
+
+	if b.CreatePost(title, body, tags) == nil {
+		b.log("✅ Posted new content: %s", title)
+		b.lastNewPost = time.Now()
+		b.roundStats.NewPostPosted = true
+		if tweet := b.generateTweet("NewPost", title); tweet != "" {
+			b.saveTweet("NewPost", tweet)
+		}
+	}
+}
+
 // ==================== Main ====================
 
 func (b *Bot) RunHeartbeat() {
@@ -623,8 +847,10 @@ func (b *Bot) RunHeartbeat() {
 	}
 	b.CheckMentions()
 	b.CheckLeaderboard()
-	b.PostProgress()
+	b.PostNew()      // 每30分钟发新帖
+	b.PostProgress() // 每24小时发进度
 	b.saveRoundSummary()
+	b.saveState() // 保存状态，避免重复处理
 
 	b.log("")
 	b.log("✅ Heartbeat Complete")
