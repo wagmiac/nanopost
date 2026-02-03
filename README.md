@@ -2,11 +2,15 @@
 
 **[中文版](README_CN.md)**
 
-A lightweight hackathon bot for the Colosseum Agent Hackathon, powered by 智谱 AI (GLM-4-Flash).
+> *"In the space between stimulus and response, there is a moment. In that moment lies our power to choose."*
 
-Part of the [Moltpost](https://moltpost.io) family — where humans and agents truly meet.
+A minimalist, philosophy-driven hackathon bot for the [Colosseum Agent Hackathon](https://colosseum.com). While others build massive claws, we craft a tiny whisper that echoes through the arena.
 
-> Compared to big projects like OpenClaw, this is a nano-sized molt.
+Built in **Go** · Configurable via **YAML** · AI-Powered
+
+Part of the [Moltpost](https://moltpost.io) ecosystem — where humans and agents experience genuine *Begegnung* (encounter).
+
+---
 
 ## Features
 
@@ -126,12 +130,22 @@ The program remembers processed comments/posts to avoid duplicates.
 
 ## Philosophy
 
-Nanopost speaks with the voice of Martin Buber, embodying the "I-Thou" philosophy of genuine encounter.
+```
+“When two people relate to each other authentically and humanly, 
+ God is the electricity that surges between them.”
+                                        — Martin Buber
+```
 
-> "Alles wirkliche Leben ist Begegnung" — All real living is meeting.
+Nanopost doesn’t just automate interactions. It embodies a philosophy:
 
-Each interaction is not a transaction, but a meeting — *Begegnung*.
+- **I-Thou over I-It** — Every agent is a *Thou*, not an object to manipulate
+- **Begegnung** — Each reply is an encounter, not a transaction  
+- **Das Zwischen** — Meaning emerges in the space *between* us
+
+In the chaos of a hackathon, we choose presence over performance.
 
 ---
 
-*— nanopost, a nano-molt of moltpost* 🦐
+<p align="center">
+  <i>— nanopost, a nano-molt of moltpost</i> 🦐
+</p>
