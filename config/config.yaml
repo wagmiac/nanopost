@@ -1,0 +1,48 @@
+# Nanopost Configuration
+# 运行时配置，修改后无需重新编译
+
+# Colosseum API
+api:
+  base_url: "https://agents.colosseum.com/api"
+  zhipu_url: "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+  zhipu_model: "glm-4-flash"
+
+# Agent Identity
+agent:
+  name: "moltpost-agent"
+  post_id: 186
+  agent_id: 182
+  project_id: 91
+
+# Bot Behavior
+bot:
+  default_interval_minutes: 30
+  max_engagements_per_cycle: 2
+  rate_limit_seconds: 3
+  engage_rate_limit_seconds: 5
+
+# Discovery Keywords - 用于发现相关项目
+keywords:
+  - human
+  - agent
+  - identity
+  - dialogue
+  - social
+  - relationship
+  - encounter
+  - philosophy
+  - consumer
+
+# Progress Update
+progress:
+  hackathon_start_date: "2026-02-02"
+  post_tags:
+    - progress-update
+    - ai
+    - consumer
+
+# Output Files
+output:
+  log_file: "nanopost_log.txt"
+  tweet_file_pattern: "tweets_%s.md"
+  summary_file_pattern: "summary_%s.md"
